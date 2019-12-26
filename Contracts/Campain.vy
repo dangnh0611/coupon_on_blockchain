@@ -15,6 +15,7 @@ TransferBearer: event({_from: indexed(address), _to: indexed(address)})
 Acquire: event({_address: indexed(address), _distributor: indexed(address)})
 Redeem: event({_address: indexed(address), _distributor: indexed(address)})
 GetSalary: event({_address: address, _amount: wei_value})
+Refund: event({_amount: wei_value})
 
 wei_per_redeemtion: wei_value
 issuer: address
@@ -22,16 +23,18 @@ num_coupons: uint256
 remain_coupons: uint256
 num_redeem: uint256
 end_time: timestamp
+refund: wei_value
 distributors: map(address, Distributor)
 bearers: map(address, Bearer)
 
 @public
-def __init__(_issuer: address, _num_coupons: uint256, _wei_per_redeemtion: wei_value, _time_limit: timedelta):
+def initialize(_issuer: address, _num_coupons: uint256, _wei_per_redeemtion: wei_value, _time_limit: timedelta, _refund: wei_value):
     self.end_time= block.timestamp + _time_limit
     self.issuer= _issuer
     self.num_coupons=_num_coupons
     self.wei_per_redeemtion= _wei_per_redeemtion
     self.remain_coupons= self.num_coupons
+    self.refund=_refund
     self.distributors[_issuer]=Distributor({alive: True, num_acquired: 0, num_redeemed: 0})
 
 @public
@@ -88,6 +91,14 @@ def get_salary():
         salary: wei_value=self.wei_per_redeemtion*num_redeemed
         send(msg.sender, salary)
         log.GetSalary(msg.sender, salary)
+
+@public
+def get_refund():
+    assert block.timestamp>self.end_time
+    assert msg.sender==self.issuer
+    assert self.refund>0
+    send(self.issuer, self.refund)
+    log.Refund(self.refund)
 
 @public
 def acquire(_hash: bytes32, v: uint256, r: uint256, s: uint256, _distributor: address) -> bool:
