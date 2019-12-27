@@ -18,7 +18,7 @@ struct CampainDetail:
     total: uint256
     remain: uint256
     num_redeemed: uint256
-    wei_per_redeemtion: uint256
+    wei_per_redeemtion: wei_value
 
 AddDistributor: event({_distributor: address})
 RemoveDistributor: event({_distributor: address})
@@ -36,7 +36,7 @@ wei_per_redeemtion: wei_value
 issuer: address
 num_coupons: uint256
 remain_coupons: uint256
-num_redeem: uint256
+num_redeemed: uint256
 end_time: timestamp
 refund: wei_value
 distributors: Distributor[MAX_DISTRIBUTOR]
@@ -154,7 +154,7 @@ def update_acquire(_bearer: address, _distributor: address) -> bool:
 
 @private
 def update_redeem(_bearer: address, _distributor: address) -> bool:
-    self.num_redeem+=1
+    self.num_redeemed+=1
     for i in range(MAX_DISTRIBUTOR):
         if self.distributors[i]._address==_distributor:
             self.distributors[i].num_redeemed+=1
@@ -168,9 +168,9 @@ def withdraw():
     assert self.wei_per_redeemtion > 0
     for i in range(MAX_DISTRIBUTOR):
         if self.distributors[i]._address==msg.sender:
-            num_redeemed: uint256 = self.distributors[i].num_redeemed
-            if num_redeemed>0:
-                salary: wei_value=self.wei_per_redeemtion*num_redeemed - self.distributors[i].received
+            _num_redeemed: uint256 = self.distributors[i].num_redeemed
+            if _num_redeemed>0:
+                salary: wei_value=self.wei_per_redeemtion*_num_redeemed - self.distributors[i].received
                 assert salary > 0
                 send(msg.sender, salary)
                 log.GetSalary(msg.sender, salary)
@@ -178,7 +178,7 @@ def withdraw():
         break
 
 @public
-def refund():
+def final_refund():
     assert block.timestamp>self.end_time
     assert msg.sender==self.issuer
     assert self.refund>0

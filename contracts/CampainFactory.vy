@@ -16,7 +16,7 @@ def create_campain(_num_coupon: uint256,_is_free_from_issuer: bool, _wei_per_red
     _required_value: wei_value= _wei_per_redeemtion*_num_coupon
     assert msg.value>= _required_value
 
-    new_campain: address = create_forwarder_to(self.campain_template, _required_value)
+    new_campain: address = create_forwarder_to(self.campain_template, value=_required_value)
     Campain(new_campain).initialize(msg.sender, _is_free_from_issuer, _num_coupon, _wei_per_redeemtion, _time_limit, _name, _category, _description)
     log.NewCampain(msg.sender,_is_free_from_issuer, _num_coupon, _wei_per_redeemtion, _name, _category, _description)
     refund: wei_value = msg.value - _required_value
