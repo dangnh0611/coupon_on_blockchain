@@ -1,9 +1,9 @@
 import Campain_interface as Campain
 
-NewCampain: event({_issuer: indexed(address), _is_free_from_issuer: bool, _num_coupon: uint256, _wei_per_redeemtion: wei_value, _name: string[50], _category: indexed(string[20]), _description: string[100] })
+NewCampain: event({_issuer: indexed(address), _is_free_from_issuer: bool, _num_coupon: uint256, _wei_per_redeemtion: wei_value, _name: string[50], _category: string[20], _description: string[100] })
 Refund: event({_issuer: indexed(address), _amount: wei_value})
 
-campain_template: public(address)
+campain_template: address
 
 @public
 def __init__(_campain_template: address):

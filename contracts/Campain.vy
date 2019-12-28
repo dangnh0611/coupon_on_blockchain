@@ -10,16 +10,6 @@ struct Distributor:
     num_redeemed: uint256
     received: wei_value
 
-struct CampainDetail:
-    name: string[50]
-    category: string[20]
-    description: string[100]
-    end_time: timestamp
-    total: uint256
-    remain: uint256
-    num_redeemed: uint256
-    wei_per_redeemtion: wei_value
-
 AddDistributor: event({_distributor: address})
 RemoveDistributor: event({_distributor: address})
 TransferBearer: event({_from: indexed(address), _to: indexed(address)})
@@ -85,13 +75,49 @@ def initialize(_issuer: address, _is_free_from_issuer: bool, _num_coupons: uint2
 
 @public
 @constant
-def get_distributors_detail(_idx: uint256) -> Distributor:
-    return self.distributors[_idx]
+def get_distributors_address(_idx: uint256) -> address:
+    return self.distributors[_idx]._address
 
 @public
 @constant
-def get_campain_detail() -> CampainDetail:
-    return CampainDetail({name:self.name, category: self.category, description: self.description, end_time: self.end_time, total: self.num_coupons, remain: self.remain_coupons,num_redeemed: self.num_redeemed, wei_per_redeemtion: self.wei_per_redeemtion })
+def get_distributors_status(_idx: uint256) -> uint256[2]:
+    return [self.distributors[_idx].num_acquired, self.distributors[_idx].num_redeemed]
+
+@public
+@constant
+def get_distributors_withdrawed(_idx: uint256) -> wei_value:
+    return self.distributors[_idx].received
+
+
+@public
+@constant
+def get_campain_name() -> string[50]:
+    return self.name
+
+@public
+@constant
+def get_campain_category() -> string[20]:
+    return self.category
+
+@public
+@constant
+def get_campain_description() -> string[100]:
+    return self.description
+
+@public
+@constant
+def get_campain_endtime() ->timestamp:
+    return self.end_time
+
+@public
+@constant
+def get_wei_per_redeemed() -> wei_value: 
+    return self.wei_per_redeemtion
+
+@public
+@constant
+def get_campain_status() -> uint256[3]:
+    return [self.num_coupons, self.remain_coupons, self.num_redeemed]
 
 @public
 def add_distributor(_new_distributor: address) -> bool:
