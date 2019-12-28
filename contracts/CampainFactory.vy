@@ -1,4 +1,5 @@
-import Campain_interface as Campain
+contract Campain:
+    def initialize(_issuer: address, _is_free_from_issuer: bool, _num_coupons: uint256, _wei_per_redeemtion: uint256(wei), _time_limit: uint256(sec), _name: string[50], _category: string[20], _description: string[100]) : modifying
 
 NewCampain: event({_issuer: indexed(address), _is_free_from_issuer: bool, _num_coupon: uint256, _wei_per_redeemtion: wei_value, _name: string[50], _category: string[20], _description: string[100] })
 Refund: event({_issuer: indexed(address), _amount: wei_value})

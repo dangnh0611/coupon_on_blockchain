@@ -1,4 +1,4 @@
-package CampainFactory;
+package ContractWrapper;
 
 import io.reactivex.Flowable;
 import io.reactivex.functions.Function;

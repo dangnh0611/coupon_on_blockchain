@@ -71,7 +71,7 @@ def initialize(_issuer: address, _is_free_from_issuer: bool, _num_coupons: uint2
     self.wei_per_redeemtion= _wei_per_redeemtion
     self.remain_coupons= self.num_coupons
     self.distributors[0]=Distributor({_address: _issuer, num_acquired: 0, num_redeemed: 0, received: 0})
-    self.cur_distributors=0
+    self.cur_distributors=1
 
 @public
 @constant
@@ -120,55 +120,40 @@ def get_campain_status() -> uint256[3]:
     return [self.num_coupons, self.remain_coupons, self.num_redeemed]
 
 @public
-def add_distributor(_new_distributor: address) -> bool:
-    if msg.sender!=self.issuer:
-        return False
-    if self.cur_distributors == MAX_DISTRIBUTOR:
-        return False
+def add_distributor(_new_distributor: address):
+    assert msg.sender == self.issuer
+    assert self.cur_distributors < MAX_DISTRIBUTOR
     suit_idx: int128 = -1
     for i in range(MAX_DISTRIBUTOR):
+        assert self.distributors[i]._address != _new_distributor
         if (suit_idx==-1) and (self.distributors[i]._address==ZERO_ADDRESS):
-            suit_idx=i 
-        elif self.distributors[i]._address==_new_distributor:
-            return False
-        else: 
-            continue
+            suit_idx=i
     if suit_idx!=-1:
         self.distributors[suit_idx]=Distributor({_address: _new_distributor, num_acquired:0, num_redeemed:0, received: 0})
         log.AddDistributor(_new_distributor)
-        return True
-    return False
 
 @public
-def remove_distributor(_target_distributor: address) -> bool:
-    if msg.sender != self.issuer:
-        return False
+def remove_distributor(_target_distributor: address):
+    assert msg.sender == self.issuer
     for i in range(MAX_DISTRIBUTOR):
         if self.distributors[i]._address==_target_distributor:
-            if self.distributors[i].num_acquired!=0:
-                return False
-            else:
-                clear(self.distributors[i])
-                log.RemoveDistributor(_target_distributor)
-                return True
-    return False
+            assert self.distributors[i].num_acquired == 0
+            clear(self.distributors[i])
+            log.RemoveDistributor(_target_distributor)
 
 @public 
-def transfer_coupon(_dest_address: address) -> bool:
-    if block.timestamp > self.end_time:
-        return False
-    if self.bearers[_dest_address].acquired==True:
-        return False
-    if (self.bearers[msg.sender].acquired==True) and (self.bearers[msg.sender].transfered==False) and (self.bearers[msg.sender].redeemed== False):
-        self.bearers[msg.sender].transfered=True
-        self.bearers[_dest_address]=Bearer({acquired: True, transfered: False, redeemed: False, distributor: self.bearers[msg.sender].distributor})
-        log.TransferBearer(msg.sender, _dest_address)
-        return True
-    else:
-        return False
+def transfer_coupon(_dest_address: address):
+    assert block.timestamp <= self.end_time
+    assert not(self.bearers[_dest_address].acquired)
+    assert self.bearers[msg.sender].acquired
+    assert not(self.bearers[msg.sender].transfered)
+    assert not(self.bearers[msg.sender].redeemed)
+    self.bearers[msg.sender].transfered=True
+    self.bearers[_dest_address]=Bearer({acquired: True, transfered: False, redeemed: False, distributor: self.bearers[msg.sender].distributor})
+    log.TransferBearer(msg.sender, _dest_address)
 
 @private
-def update_acquire(_bearer: address, _distributor: address) -> bool:
+def update_acquire(_bearer: address, _distributor: address):
     self.remain_coupons-=1
     for i in range(MAX_DISTRIBUTOR):
         if self.distributors[i]._address==_distributor:
@@ -176,10 +161,9 @@ def update_acquire(_bearer: address, _distributor: address) -> bool:
             break
     self.bearers[_bearer]=Bearer({acquired: True, transfered: False, redeemed: False, distributor: _distributor})
     log.Acquire(_bearer, _distributor)
-    return True
 
 @private
-def update_redeem(_bearer: address, _distributor: address) -> bool:
+def update_redeem(_bearer: address, _distributor: address):
     self.num_redeemed+=1
     for i in range(MAX_DISTRIBUTOR):
         if self.distributors[i]._address==_distributor:
@@ -187,7 +171,6 @@ def update_redeem(_bearer: address, _distributor: address) -> bool:
             break
     self.bearers[_bearer].redeemed=True
     log.Redeem(_bearer, _distributor)
-    return True
 
 @public
 def withdraw():
@@ -212,46 +195,36 @@ def final_refund():
     log.Refund(self.refund)
 
 @public
-def free_acquire_from_issuer() -> bool:
-    if (block.timestamp > self.end_time):
-        return False
-    if msg.sender ==self.issuer:
-        return False
-    if self.remain_coupons==0:
-        return False
-    return self.update_acquire(msg.sender, self.issuer)
+def free_acquire_from_issuer():
+    assert block.timestamp <= self.end_time
+    assert msg.sender != self.issuer
+    assert self.remain_coupons > 0
+    self.update_acquire(msg.sender, self.issuer)
     
 @public
-def acquire(_hash: bytes32, v: uint256, r: uint256, s: uint256, _distributor: address) -> bool:
-    if (block.timestamp > self.end_time):
-        return False
-    if self.remain_coupons==0:
-        return False
+def acquire(_hash: bytes32, v: uint256, r: uint256, s: uint256, _distributor: address):
+    assert block.timestamp <= self.end_time
+    assert self.remain_coupons > 0
     exist_distributor: bool = False
     for i in range(MAX_DISTRIBUTOR):
         if self.distributors[i]._address==_distributor:
             exist_distributor=True
             break
-    if not(exist_distributor):
-        return False
-    if msg.sender==self.issuer:
-        return False
-    if _hash != keccak256(concat(convert(msg.sender,bytes32),convert(self, bytes32))):
-        return False
-    if (self.bearers[msg.sender].acquired==True) or (self.bearers[msg.sender].transfered==True):
-        return False
-    if ecrecover(_hash, v, r, s)==_distributor:
-        return self.update_acquire(msg.sender, _distributor)
-    return False
+    assert exist_distributor
+    assert msg.sender != self.issuer
+    assert _hash == keccak256(concat(convert(msg.sender,bytes32),convert(self, bytes32)))
+    assert not(self.bearers[msg.sender].acquired)
+    assert not(self.bearers[msg.sender].transfered)
+    assert ecrecover(_hash, v, r, s)==_distributor
+    self.update_acquire(msg.sender, _distributor)
 
 @public
-def redeem(_bearer: address, _hash: bytes32, v: uint256, r: uint256, s: uint256) -> bool:
-    if block.timestamp > self.end_time:
-        return False
-    if _bearer==self.issuer:
-        return False
-    if _hash != keccak256(concat(convert(_bearer,bytes32),convert(self, bytes32))):
-        return False
-    if (self.bearers[_bearer].transfered==False) and (self.bearers[_bearer].acquired==True) and (self.bearers[_bearer].redeemed==False) and (ecrecover(_hash, v, r, s)==_bearer):
-        return self.update_redeem(_bearer, self.bearers[_bearer].distributor)
-    return False
+def redeem(_bearer: address, _hash: bytes32, v: uint256, r: uint256, s: uint256):
+    assert block.timestamp <= self.end_time
+    assert _bearer != self.issuer
+    assert _hash == keccak256(concat(convert(_bearer,bytes32),convert(self, bytes32)))
+    assert not(self.bearers[_bearer].transfered)
+    assert self.bearers[_bearer].acquired
+    assert not(self.bearers[_bearer].redeemed)
+    assert ecrecover(_hash, v, r, s)==_bearer
+    self.update_redeem(_bearer, self.bearers[_bearer].distributor)
