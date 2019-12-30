@@ -10,6 +10,11 @@ struct Distributor:
     num_redeemed: uint256
     received: wei_value
 
+contract CampainFactory:
+    def log_acquire(_bearer: address, _end_time: timestamp): modifying
+
+    def log_redeem(_bearer: address): modifying
+
 AddDistributor: event({_distributor: address})
 RemoveDistributor: event({_distributor: address})
 TransferBearer: event({_from: indexed(address), _to: indexed(address)})
@@ -35,10 +40,11 @@ name: string[50]
 category: string[20]
 description: string[100]
 is_free: bool
+factory_address: public(address)
 
 @public
 @payable
-def __init__(_issuer: address,_is_free_from_issuer: bool, _num_coupons: uint256, _wei_per_redeemtion: wei_value, _time_limit: timedelta, _name: string[50], _category: string[20], _description: string[100]):
+def __init__(_issuer: address,_is_free_from_issuer: bool, _num_coupons: uint256, _wei_per_redeemtion: wei_value, _end_time: timestamp, _name: string[50], _category: string[20], _description: string[100]):
     self.is_initialized=True
     self.refund=_wei_per_redeemtion*_num_coupons
     assert msg.value >=self.refund
@@ -46,18 +52,18 @@ def __init__(_issuer: address,_is_free_from_issuer: bool, _num_coupons: uint256,
     self.category=_category
     self.description=_description
     self.is_free= _is_free_from_issuer
-    self.end_time= block.timestamp + _time_limit
+    self.end_time= _end_time
     self.issuer= _issuer
     self.num_coupons=_num_coupons
     self.wei_per_redeemtion= _wei_per_redeemtion
     self.remain_coupons= self.num_coupons
     self.distributors[0]=Distributor({_address: _issuer, num_acquired: 0, num_redeemed: 0, received: 0})
-    self.cur_distributors=0
+    self.cur_distributors=1
 
 # @nonreentrant('lock')
 @public
 @payable
-def initialize(_issuer: address, _is_free_from_issuer: bool, _num_coupons: uint256, _wei_per_redeemtion: wei_value, _time_limit: timedelta, _name: string[50], _category: string[20], _description: string[100]):
+def initialize(_issuer: address, _is_free_from_issuer: bool, _num_coupons: uint256, _wei_per_redeemtion: wei_value, _end_time: timestamp, _name: string[50], _category: string[20], _description: string[100]):
     assert not(self.is_initialized)
     self.is_initialized=True
     self.refund=_wei_per_redeemtion*_num_coupons
@@ -65,13 +71,14 @@ def initialize(_issuer: address, _is_free_from_issuer: bool, _num_coupons: uint2
     self.category=_category
     self.description=_description
     self.is_free=_is_free_from_issuer
-    self.end_time= block.timestamp + _time_limit
+    self.end_time= _end_time
     self.issuer= _issuer
     self.num_coupons=_num_coupons
     self.wei_per_redeemtion= _wei_per_redeemtion
     self.remain_coupons= self.num_coupons
     self.distributors[0]=Distributor({_address: _issuer, num_acquired: 0, num_redeemed: 0, received: 0})
     self.cur_distributors=1
+    self.factory_address = msg.sender
 
 @public
 @constant
@@ -88,6 +95,11 @@ def get_distributors_status(_idx: uint256) -> uint256[2]:
 def get_distributors_withdrawed(_idx: uint256) -> wei_value:
     return self.distributors[_idx].received
 
+@public
+@constant
+def get_bearer_status(_address: address) -> bool[3]:
+    b: Bearer = self.bearers[_address]
+    return [b.acquired, b.transfered, b.redeemed]
 
 @public
 @constant
@@ -151,7 +163,7 @@ def transfer_coupon(_dest_address: address):
     self.bearers[msg.sender].transfered=True
     self.bearers[_dest_address]=Bearer({acquired: True, transfered: False, redeemed: False, distributor: self.bearers[msg.sender].distributor})
     log.TransferBearer(msg.sender, _dest_address)
-
+    
 @private
 def update_acquire(_bearer: address, _distributor: address):
     self.remain_coupons-=1
@@ -161,6 +173,7 @@ def update_acquire(_bearer: address, _distributor: address):
             break
     self.bearers[_bearer]=Bearer({acquired: True, transfered: False, redeemed: False, distributor: _distributor})
     log.Acquire(_bearer, _distributor)
+    CampainFactory(self.factory_address).log_acquire(_bearer, self.end_time)
 
 @private
 def update_redeem(_bearer: address, _distributor: address):
@@ -171,6 +184,7 @@ def update_redeem(_bearer: address, _distributor: address):
             break
     self.bearers[_bearer].redeemed=True
     log.Redeem(_bearer, _distributor)
+    CampainFactory(self.factory_address).log_redeem(_bearer)
 
 @public
 def withdraw():
@@ -221,10 +235,18 @@ def acquire(_hash: bytes32, v: uint256, r: uint256, s: uint256, _distributor: ad
 @public
 def redeem(_bearer: address, _hash: bytes32, v: uint256, r: uint256, s: uint256):
     assert block.timestamp <= self.end_time
-    assert _bearer != self.issuer
+    assert msg.sender == self.issuer
     assert _hash == keccak256(concat(convert(_bearer,bytes32),convert(self, bytes32)))
     assert not(self.bearers[_bearer].transfered)
     assert self.bearers[_bearer].acquired
     assert not(self.bearers[_bearer].redeemed)
     assert ecrecover(_hash, v, r, s)==_bearer
     self.update_redeem(_bearer, self.bearers[_bearer].distributor)
+
+@public
+def give_coupon_to(_target: address):
+    assert msg.sender == self.issuer
+    assert block.timestamp <=self.end_time
+    assert self.remain_coupons > 0
+    assert not(self.bearers[_target].acquired)
+    self.update_acquire(_target, self.issuer)
